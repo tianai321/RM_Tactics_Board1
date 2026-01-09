@@ -52,12 +52,12 @@
     </div>
 
     <v-row justify="center">
-      <v-col cols="12">
+      <v-col cols="12" >
         <div class="mb-8 text-center">
           <h1 class="text-h2 font-weight-bold">{{ Math.floor(time / 60) }}:{{ Math.floor((time % 60)).toString().padStart(2, '0') }}</h1>
           
           <v-row v-if="isRMUC" class="mt-2 mb-4" dense>
-            <v-col cols="4" sm="4" md="4">
+            <v-col cols="6" sm="6" md="6">
               <v-card 
                 class="h-100 small-buff-card" 
                 :color="getSmallBuffColor" 
@@ -70,7 +70,7 @@
               </v-card>
             </v-col>
             
-            <v-col cols="4" sm="4" md="4">
+            <v-col cols="6" sm="6" md="6">
               <v-card 
                 class="h-100 big-buff-card" 
                 :color="getBigBuffColor" 
@@ -83,7 +83,7 @@
               </v-card>
             </v-col>
             
-            <v-col cols="4" sm="4" md="4">
+            <!-- <v-col cols="4" sm="4" md="4">
               <v-card 
                 class="h-100 hits-card" 
                 :class="{ 'hit-flash': isHitFlashing }"
@@ -95,7 +95,7 @@
                   <div class="text-caption font-weight-bold">部署数{{ deploymentHits }}</div>
                 </v-card-text>
               </v-card>
-            </v-col>
+            </v-col> -->
           </v-row>
 
           <v-row v-else class="mt-2 mb-4" dense>
@@ -270,8 +270,8 @@ export default {
       mapHeight: 0,
       mapAspectRatio: 1.82,
       small_buff: [
-        [5,35],
-        [90,120]
+        [0,20],
+        [90,110]
       ],
       lastHitCount: 2, // 初始命中数
       isHitFlashing: false,
