@@ -1,4 +1,4 @@
-<template>
+<template v-if="mapLoaded">
   <v-container class="fill-height" max-width="2500">
     <div style="position: absolute; top: 0; left: 0; padding: 16px;">
       <v-btn-toggle
@@ -42,12 +42,57 @@
       >
         {{ drawingMode ? '退出画笔' : '画笔模式' }}
       </v-btn>
+      
       <v-btn
+        v-if="drawingMode"
+        :color="eraserMode ? 'warning' : 'grey'"
+        class="mb-4 ml-2"
+        @click="toggleEraserMode"
+      >
+        {{ eraserMode ? '退出橡皮擦' : '橡皮擦' }}
+      </v-btn>
+      
+      <v-menu v-if="drawingMode && !eraserMode" offset-y>
+        <template v-slot:activator="{ props }">
+          <v-btn
+            v-bind="props"
+            class="mb-4 ml-2"
+            :style="{ backgroundColor: penColor }"
+          >
+            画笔颜色
+          </v-btn>
+        </template>
+        <v-list>
+          <v-list-item
+            v-for="color in penColors"
+            :key="color.value"
+            @click="penColor = color.value"
+          >
+            <v-list-item-title>
+              <v-icon :style="{ color: color.value }" class="mr-2">mdi-circle</v-icon>
+              {{ color.name }}
+            </v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+      
+      <v-btn
+        v-if="drawingMode"
+        color="orange"
+        class="mb-4 ml-2"
+        @click="undoLastPath"
+        :disabled="paths.length === 0"
+      >
+        撤销
+      </v-btn>
+      
+      <v-btn
+        v-if="drawingMode"
         color="blue-grey"
         class="mb-4 ml-2"
         @click="clearDrawings"
       >
-        清除标记
+        清除全部
       </v-btn>
     </div>
 
@@ -168,7 +213,6 @@
               
               <!-- 可拖动的球员标记 -->
               <div
-                v-if="mapLoaded"
                 v-for="(player, index) in players"
                 :key="index"
                 class="player-circle"
@@ -276,11 +320,24 @@ export default {
       lastHitCount: 2, // 初始命中数
       isHitFlashing: false,
       drawingMode: false,
+      eraserMode: false,
       isDrawing: false,
       currentPath: [],
       paths: [],
       penColor: '#ff5252',
       penWidth: 3,
+      penColors: [
+        { name: '红色', value: '#ff5252' },
+        { name: '蓝色', value: '#2196F3' },
+        { name: '绿色', value: '#4CAF50' },
+        { name: '黄色', value: '#FFEB3B' },
+        { name: '橙色', value: '#FF9800' },
+        { name: '紫色', value: '#9C27B0' },
+        { name: '粉色', value: '#E91E63' },
+        { name: '青色', value: '#00BCD4' },
+        { name: '黑色', value: '#000000' },
+        { name: '白色', value: '#FFFFFF' },
+      ],
       rmulCoinBase: RMUL_COIN_BASE,
       rmulCoinEvents: RMUL_COIN_EVENTS,
       bigBuffActivationSeconds: BIG_BUFF_ACTIVATION_SECONDS,
@@ -697,6 +754,22 @@ export default {
       if (!this.drawingMode) {
         this.isDrawing = false;
         this.currentPath = [];
+        this.eraserMode = false;
+      }
+    },
+
+    toggleEraserMode() {
+      this.eraserMode = !this.eraserMode;
+      if (this.eraserMode) {
+        this.isDrawing = false;
+        this.currentPath = [];
+      }
+    },
+
+    undoLastPath() {
+      if (this.paths.length > 0) {
+        this.paths.pop();
+        this.redrawPaths();
       }
     },
 
@@ -708,7 +781,18 @@ export default {
 
     startDraw(event) {
       if (!this.drawingMode || !this.mapLoaded) return;
+      
       this.isDrawing = true;
+      
+      if (this.eraserMode) {
+        // 橡皮擦模式：删除点击位置的路径
+        const point = this.getNormalizedPoint(event);
+        if (point) {
+          this.removePathAtPoint(point);
+        }
+        return;
+      }
+      
       this.currentPath = [];
       const point = this.getNormalizedPoint(event);
       if (point) {
@@ -719,8 +803,15 @@ export default {
 
     moveDraw(event) {
       if (!this.isDrawing) return;
+      
       const point = this.getNormalizedPoint(event);
-      if (point) {
+      if (!point) return;
+      
+      if (this.eraserMode) {
+        // 橡皮擦模式：移动时删除碰到的路径
+        this.removePathAtPoint(point);
+      } else {
+        // 绘画模式：添加点到路径
         this.currentPath.push(point);
         this.redrawPaths();
       }
@@ -729,20 +820,33 @@ export default {
     endDraw() {
       if (!this.isDrawing) return;
       this.isDrawing = false;
-      if (this.currentPath.length > 1) {
+      
+      if (!this.eraserMode && this.currentPath.length > 1) {
         this.paths.push({
           points: [...this.currentPath],
           color: this.penColor,
           width: this.penWidth,
         });
       }
+      
       this.currentPath = [];
       this.redrawPaths();
     },
 
     startTouchDraw(event) {
       if (!this.drawingMode || !this.mapLoaded) return;
+      
       this.isDrawing = true;
+      
+      if (this.eraserMode) {
+        // 橡皮擦模式：删除点击位置的路径
+        const point = this.getNormalizedPoint(event.touches[0]);
+        if (point) {
+          this.removePathAtPoint(point);
+        }
+        return;
+      }
+      
       this.currentPath = [];
       const point = this.getNormalizedPoint(event.touches[0]);
       if (point) {
@@ -753,8 +857,15 @@ export default {
 
     moveTouchDraw(event) {
       if (!this.isDrawing) return;
+      
       const point = this.getNormalizedPoint(event.touches[0]);
-      if (point) {
+      if (!point) return;
+      
+      if (this.eraserMode) {
+        // 橡皮擦模式：移动时删除碰到的路径
+        this.removePathAtPoint(point);
+      } else {
+        // 绘画模式：添加点到路径
         this.currentPath.push(point);
         this.redrawPaths();
       }
@@ -776,6 +887,54 @@ export default {
         x: Math.min(1, Math.max(0, x)),
         y: Math.min(1, Math.max(0, y)),
       };
+    },
+
+    removePathAtPoint(point) {
+      // 检测点击位置附近的路径并删除
+      const threshold = 0.02; // 检测阈值（相对于画布大小）
+      
+      for (let i = this.paths.length - 1; i >= 0; i--) {
+        const path = this.paths[i];
+        for (let j = 0; j < path.points.length - 1; j++) {
+          const p1 = path.points[j];
+          const p2 = path.points[j + 1];
+          
+          // 计算点到线段的距离
+          const dist = this.pointToLineDistance(point, p1, p2);
+          if (dist < threshold) {
+            this.paths.splice(i, 1);
+            this.redrawPaths();
+            return;
+          }
+        }
+      }
+    },
+
+    pointToLineDistance(point, lineStart, lineEnd) {
+      // 计算点到线段的距离
+      const dx = lineEnd.x - lineStart.x;
+      const dy = lineEnd.y - lineStart.y;
+      const lengthSquared = dx * dx + dy * dy;
+      
+      if (lengthSquared === 0) {
+        // 线段退化为点
+        const distX = point.x - lineStart.x;
+        const distY = point.y - lineStart.y;
+        return Math.sqrt(distX * distX + distY * distY);
+      }
+      
+      // 计算投影参数
+      let t = ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSquared;
+      t = Math.max(0, Math.min(1, t));
+      
+      // 计算投影点
+      const projX = lineStart.x + t * dx;
+      const projY = lineStart.y + t * dy;
+      
+      // 计算距离
+      const distX = point.x - projX;
+      const distY = point.y - projY;
+      return Math.sqrt(distX * distX + distY * distY);
     },
 
     redrawPaths() {
